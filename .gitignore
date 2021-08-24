@@ -1,0 +1,4 @@
+spdk_baseline/log_devBaseline_*
+.vscode
+filebench/outputs*
+filebench/logs*
