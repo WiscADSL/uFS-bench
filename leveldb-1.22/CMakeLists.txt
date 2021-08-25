@@ -28,7 +28,7 @@ option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" ON)
 option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" ON)
 option(LEVELDB_INSTALL "Install LevelDB's header and library" ON)
 
-option(LEVELDB_JL_LIBCFS "Build with libcfs (FSP)" ON)
+option(LEVELDB_JL_LIBCFS "Build with libcfs (uFS)" ON)
 option(LEVELDB_JL_USE_CPC "USE client page cache" OFF)
 
 execute_process(
@@ -51,12 +51,15 @@ if (LEVELDB_JL_LIBCFS)
   add_definitions(-DJL_LIBCFS)
   add_definitions(-DNO_INCLUDE_JSON)
   #add_definitions(-D_CFS_LIB_PRINT_REQ_)
-  set(LIBCFS_ROOT_DIR "$ENV{HOME}/workspace/ApparateFS/cfs")
+  set(LIBCFS_ROOT_DIR "$ENV{CFS_ROOT_DIR}/cfs")
   set(LIBCFS_INCLUDE_DIR "${LIBCFS_ROOT_DIR}/include")
   set(LIBCFS_SRC_DIR "${LIBCFS_ROOT_DIR}/src")
   include_directories(${LIBCFS_INCLUDE_DIR})
   include_directories("${LIBCFS_ROOT_DIR}/lib/tbb/include/")
-  file(GLOB LIBCFS_TBB_LIB "${LIBCFS_ROOT_DIR}/lib/tbb/build/linux_*cc10*_kernel${tbb_kver_out}_release")
+  file(GLOB LIBCFS_TBB_LIB "${LIBCFS_ROOT_DIR}/lib/tbb/build/tbb_build_release")
+  # NOTE: when building tbb, make a symbolic link from this directory to tbb_build_release
+  # because this directory may contain platform information, which makes things less portable...
+  # By using a symbolic link, hopefully thinge would be more easy to handle...
   #set(LIBCFS_TBB_LIB "${LIBCFS_ROOT_DIR}/lib/tbb/build/linux_intel64_gcc_cc10.2.0_libc2.31_kernel5.4.0_release")
   message("tbb directory:${LIBCFS_TBB_LIB}")
   link_directories("${LIBCFS_TBB_LIB}")
