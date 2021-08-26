@@ -65,14 +65,18 @@ def start_fsp(num_app, num_worker, fsp_out):
         time.sleep(0.1)
     return fs_proc
 
-
+fsp_shutdown_timeout = 15
 def shutdown_fsp(fs_proc):
     with open(exit_fname, 'w+') as f:
         f.write('Apparate')
-    fs_proc.wait()
-    # this kill should return non-zero for not finding fsMain...
-    if subprocess.run(["pkill", "fsMain"]).returncode == 0:
-        print("WARN: Detect fsMain after shutdown; kill...")
+    try:
+        fs_proc.wait(fsp_shutdown_timeout)
+        # if there is a large amount of data to flush before exits, it could
+        # take a while before gracefully exit, but we don't really care...
+        # to speed up the experiments, we just kill it...
+    except subprocess.TimeoutExpired:
+        print(f"WARN: uFS server doesn't exit after {fsp_shutdown_timeout} seconds; will enforce shutdown")
+        subprocess.run(["pkill", "fsMain"])
 
 
 def start_filebench(num_app, num_worker, filebench_out):
