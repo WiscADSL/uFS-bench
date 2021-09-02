@@ -162,6 +162,7 @@ int main(int argc, char *argv[]) {
         fflush(stderr);
         fs_syncall();
     }
+    sleep(10);
     fs_exit();
     fprintf(stderr, "fs_exit DONE\n");
     fs_cleanup();
