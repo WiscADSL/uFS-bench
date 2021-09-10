@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sched.h>
 #include <stdarg.h>
+#include <stdexcept>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,58 +27,55 @@ uint64_t now_usec(void);
 int setaffinity(int c);
 
 static void __attribute__((noreturn)) vdie(const char *errstr, va_list ap) {
-    vfprintf(stderr, errstr, ap);
-    fprintf(stderr, "\n");
-    exit(1);
+  vfprintf(stderr, errstr, ap);
+  fprintf(stderr, "\n");
+  exit(1);
 }
 
 void __attribute__((noreturn)) die(const char *errstr, ...) {
-    va_list ap;
+  va_list ap;
 
-    va_start(ap, errstr);
-    vdie(errstr, ap);
+  va_start(ap, errstr);
+  vdie(errstr, ap);
 }
 
 void edie(const char *errstr, ...) {
-    va_list ap;
+  va_list ap;
 
-    va_start(ap, errstr);
-    vfprintf(stderr, errstr, ap);
-    va_end(ap);
-    fprintf(stderr, ": %s\n", strerror(errno));
-    exit(1);
+  va_start(ap, errstr);
+  vfprintf(stderr, errstr, ap);
+  va_end(ap);
+  fprintf(stderr, ": %s\n", strerror(errno));
+  exit(1);
 }
 
+// It is supposed to make things handy, but somehow scalefs's code doesn't use it...
 uint64_t now_usec(void) {
-    struct timeval tv;
-    if (gettimeofday(&tv, NULL) < 0)
-        edie("gettimeofday");
-    return tv.tv_sec * 1000000ull + tv.tv_usec;
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) < 0)
+    edie("gettimeofday");
+  return ((uint64_t)tv.tv_sec) * 1000000ull + ((uint64_t)tv.tv_usec);
 }
 
 int setaffinity(int c) {
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(c, &cpuset);
-    if (sched_setaffinity(0, sizeof(cpuset), &cpuset) < 0)
-        edie("setaffinity, sched_setaffinity failed");
-    return 0;
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(c, &cpuset);
+  if (sched_setaffinity(0, sizeof(cpuset), &cpuset) < 0)
+    edie("setaffinity, sched_setaffinity failed");
+  return 0;
 }
 
 #define NTEST 100000 /* No. of tests of gettimeofday() */
 
 unsigned long get_timer_overhead() {
-    struct timeval before, after, dummy;
-    unsigned long timer_overhead;
-    gettimeofday(&before, NULL);
-    for (int i = 0; i < NTEST; i++)
-        gettimeofday(&dummy, NULL);
-    gettimeofday(&after, NULL);
-
-    timer_overhead = (after.tv_sec - before.tv_sec) * 1000000 +
-                     (after.tv_usec - before.tv_usec);
-    timer_overhead /= NTEST;
-    return timer_overhead;
+  uint64_t before, after, dummy;
+  unsigned long timer_overhead;
+  before = now_usec();
+  for (int i = 0; i < NTEST; i++)
+    dummy = now_usec();
+  after = now_usec();
+  return (after - before) / NTEST;
 }
 
 // uFS wrapper code below
@@ -86,7 +84,7 @@ unsigned long get_timer_overhead() {
 #define Fstat(fd, statbuf) fs_fstat(fd, statbuf)
 // open is a little special as it may only take two args
 int Open(const char *pathname, int flags, mode_t mode = 0) {
-    return fs_open(pathname, flags, mode);
+  return fs_open(pathname, flags, mode);
 }
 #define Close(fd) fs_close(fd)
 #define Unlink(pathname) fs_unlink(pathname)
@@ -99,7 +97,7 @@ int Open(const char *pathname, int flags, mode_t mode = 0) {
 #define Pread(fd, buf, count, offset) fs_allocated_pread(fd, buf, count, offset)
 #define Write(fd, buf, count) fs_allocated_write(fd, buf, count)
 #define Pwrite(fd, buf, count, offset)                                         \
-    fs_allocated_pwrite(fd, buf, count, offset)
+  fs_allocated_pwrite(fd, buf, count, offset)
 #define Malloc(size) fs_malloc(size)
 #define Free(ptr) fs_free(ptr)
 
@@ -108,7 +106,7 @@ int Open(const char *pathname, int flags, mode_t mode = 0) {
 #define Fstat(fd, statbuf) fstat(fd, statbuf)
 // open is a little special as it may only take two args
 int Open(const char *pathname, int flags, mode_t mode) {
-    return open(pathname, flags, mode);
+  return open(pathname, flags, mode);
 }
 int Open(const char *pathname, int flags) { return open(pathname, flags); }
 #define Close(fd) close(fd)
@@ -128,16 +126,16 @@ int Open(const char *pathname, int flags) { return open(pathname, flags); }
 
 void initFs() {
 #ifdef USE_UFS
-    if (fs_register() < 0) {
-        fprintf(stderr, "fs_init() error\n");
-        exit(1);
-    }
+  if (fs_register() < 0) {
+    fprintf(stderr, "fs_init() error\n");
+    exit(1);
+  }
 #endif
 }
 
 void exitFs() {
 #ifdef USE_UFS
-    if (fs_exit() < 0)
-        fprintf(stderr, "fs_exit() error\n");
+  if (fs_exit() < 0)
+    fprintf(stderr, "fs_exit() error\n");
 #endif
 }
