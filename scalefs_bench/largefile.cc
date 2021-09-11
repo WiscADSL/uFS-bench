@@ -30,7 +30,7 @@ void print_usage_and_exit() {
       "    [-p [total_cores]]: creates files under per-cpu sub-directories;\n"
       "        if with `--prep', must specify how many cores will be used\n"
       "    [-c core]: core id to pin; only valid with `--bench'\n"
-      "    [-z size]: file size to create in MB (default 100)\n\n");
+      "    [-z size]: file size to create in MB (default 100); only valid with `--bench'\n\n");
   exit(1);
 }
 
