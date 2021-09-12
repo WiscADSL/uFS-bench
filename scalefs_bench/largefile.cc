@@ -83,7 +83,7 @@ void parse_arg(int argc, char **argv) {
     print_usage_and_exit();
 
   if (is_prep) {
-    if (total_cores < 0) {
+    if (per_cpu_dirs && total_cores < 0) {
       fprintf(stderr, "Must specify total number of cores by `-p'\n");
       print_usage_and_exit();
     }
@@ -145,9 +145,9 @@ void run_createfile_benchmark(int cpu) {
   uint64_t usec = create_largefile(topdir, buf, cpu);
   float sec = ((float) usec) / 1000000.0;
   float tp = ((float)(file_size >> 20)) / sec;
-  printf("Test            Time(sec)       Files/sec\n");
+  printf("Test            Time(sec)       MB/sec\n");
   printf("----            ---------       ---------\n");
-	printf("create_files\t%7.3f sec throughput : %7.3f MB/sec\n",
+	printf("create_files    %7.3f\t\t%7.3f\n",
 		sec, tp);
 
 }
@@ -161,9 +161,9 @@ void run_overwritefile_benchmark(int cpu) {
   int64_t usec = overwrite_largefile(topdir, buf, cpu);
   float sec = ((float) usec) / 1000000.0;
   float tp = ((float)(file_size >> 20)) / sec;
-  printf("Test            Time(sec)       Files/sec\n");
+  printf("Test            Time(sec)       MB/sec\n");
   printf("----            ---------       ---------\n");
-  printf("overwrite_files\t%7.3f sec throughput : %7.3f MB/sec\n",
+  printf("overwrite_files %7.3f\t\t%7.3f\n",
 		sec, tp);
 }
 

@@ -101,7 +101,7 @@ void parse_arg(int argc, char **argv) {
     print_usage_and_exit();
 
   if (is_prep) {
-    if (total_cores < 0) {
+    if (per_cpu_dirs && total_cores < 0) {
       fprintf(stderr, "Must specify total number of cores by `-p'\n");
       print_usage_and_exit();
     }
@@ -120,7 +120,6 @@ void parse_arg(int argc, char **argv) {
     }
     nfiles_per_dir = num_files / num_dirs;
     timer_overhead = get_timer_overhead();
-    printf("\n\n\n");
     printf("Running LFS-Smallfile test on %s, on Core %d\n", topdir, pin_core);
     printf("Directories are: %s\n", per_cpu_dirs ? "per-cpu" : "shared");
     printf("Number of dirs = %ld\n", num_dirs);
@@ -198,34 +197,34 @@ void run_benchmark(int cpu) {
   sec = ((float)create_usec) / 1000000.0;
   tp = ((float)num_files) / sec;
   total_sec += sec;
-  printf("create_files\t%7.3f\t\t%7.3f\n", sec, tp);
+  printf("create_files    %7.3f\t\t%7.3f\n", sec, tp);
 
   if (sync1_usec) {
     sec = ((float)sync1_usec) / 1000000.0;
     tp = ((float)num_files) / sec;
     total_sec += sec;
-    printf("sync_files_1\t%7.3f\t\t%7.3f\n", sec, tp);
+    printf("sync_files_1  %7.3f\t\t%7.3f\n", sec, tp);
   }
 
   sec = ((float)read_usec) / 1000000.0;
   tp = ((float)num_files) / sec;
   total_sec += sec;
-  printf("read_files\t%7.3f\t\t%7.3f\n", sec, tp);
+  printf("read_files      %7.3f\t\t%7.3f\n", sec, tp);
 
   sec = ((float)Unlink_usec) / 1000000.0;
   tp = ((float)num_files) / sec;
   total_sec += sec;
-  printf("unlink_files\t%7.3f\t\t%7.3f\n", sec, tp);
+  printf("unlink_files    %7.3f\t\t%7.3f\n", sec, tp);
 
   if (sync2_usec) {
     sec = ((float)sync2_usec) / 1000000.0;
     tp = ((float)num_files) / sec;
     total_sec += sec;
-    printf("sync_files_2\t%7.3f\t\t%7.3f\n", sec, tp);
+    printf("sync_files_2  %7.3f\t\t%7.3f\n", sec, tp);
   }
 
   tp = ((float)num_files) / total_sec;
-  printf("core %d total \t%7.3f\t\t%7.3f\n", cpu, total_sec, tp);
+  printf("core %d total   %7.3f\t\t%7.3f\n", cpu, total_sec, tp);
   fflush(stdout);
 }
 

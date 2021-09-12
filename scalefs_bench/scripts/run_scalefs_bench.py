@@ -11,7 +11,7 @@ CFS_MAIN_BIN_NAME = os.environ['CFS_MAIN_BIN_NAME']
 coord_pin_core = 21
 
 def print_usage_and_exit(argv0):
-    print(f"Usage: {argv0} <bench> <fs> <log_dir>")
+    print(f"Usage: {argv0} {{smallfile|largefile}} {{ufs|ext4}} <log_dir>")
     exit(1)
 
 
@@ -54,7 +54,6 @@ def cleanup():
         assert ret == 0
     else:
         ret = subprocess.run(f"rm -rf {exper_dir}/*", shell=True)
-        assert ret == 0
     ret = subprocess.call(["sync"])
     assert ret == 0
     with open("/proc/sys/vm/drop_caches", "w") as f:
@@ -173,3 +172,4 @@ for nc in range(1, num_cpu + 1):
     else:
         run_largefile(nc, "create")
         run_largefile(nc, "overwrite")
+cleanup()
