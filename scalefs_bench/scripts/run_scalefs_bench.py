@@ -103,10 +103,10 @@ def start_fsp(num_worker, num_app, fsp_out):
     fsp_command.append(exit_fname)
     fsp_command.append("/tmp/spdk.conf")
     # pin workers to 11, 12, 13, etc. (1-based index)
-    pin_core_str = ",".join(str(num_cpu + j + 1) for j in range(num_app))
+    pin_core_str = ",".join(str(num_cpu + j + 1) for j in range(num_worker))
     logging.info(
         f"Pin uFS Server workers to cores: {pin_core_str} (1-based index)")
-    fsp_command.append(offset_string)
+    fsp_command.append(pin_core_str)
     fsp_command.append("/tmp/fsp.conf")
     print(fsp_command)
 
@@ -245,6 +245,7 @@ def run_largefile(nc):
             assert ret == 0
     if is_ufs:
         shutdown_fsp(fs_proc)
+    assert num_app == next_aid
 
 
 logging.basicConfig(level=logging.INFO)

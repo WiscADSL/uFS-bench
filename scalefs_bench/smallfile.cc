@@ -175,7 +175,7 @@ void run_benchmark(int cpu) {
   unsigned long sync2_usec = 0;
   unsigned long create_usec = 0;
   unsigned long read_usec = 0;
-  unsigned long Unlink_usec = 0;
+  unsigned long unlink_usec = 0;
   float sec, tp;
   float total_sec = 0;
 
@@ -194,7 +194,7 @@ void run_benchmark(int cpu) {
     sync1_usec = sync_files();
 
   read_usec = read_files(topdir, buf, cpu);
-  Unlink_usec = unlink_files(topdir, buf, cpu);
+  unlink_usec = unlink_files(topdir, buf, cpu);
 
   if (sync_when == SYNC_UNLINK || sync_when == SYNC_CREATE_UNLINK)
     sync2_usec = sync_files();
@@ -222,7 +222,7 @@ void run_benchmark(int cpu) {
   total_sec += sec;
   printf("read_files      %7.3f\t\t%7.3f\n", sec, tp);
 
-  sec = ((float)Unlink_usec) / 1000000.0;
+  sec = ((float)unlink_usec) / 1000000.0;
   tp = ((float)num_files) / sec;
   total_sec += sec;
   printf("unlink_files    %7.3f\t\t%7.3f\n", sec, tp);
