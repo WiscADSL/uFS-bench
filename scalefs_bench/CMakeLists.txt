@@ -21,6 +21,7 @@ target_link_libraries(${SMALLFILE_BIN_NAME} PUBLIC rt)
 target_link_libraries(${LARGEFILE_BIN_NAME} PUBLIC rt)
 
 if (USE_UFS)
+  add_definitions(-DUSE_UFS)
   target_link_libraries(${SMALLFILE_BIN_NAME} PUBLIC ${CFS_DIR}/build/libcfs.so)
   target_link_libraries(${SMALLFILE_BIN_NAME} PUBLIC ${CFS_DIR}/lib/tbb/build/tbb_build_release/libtbb.so.2)
   target_link_libraries(${SMALLFILE_BIN_NAME} PUBLIC ${CFS_DIR}/lib/tbb/build/tbb_build_release/libtbbmalloc.so.2)

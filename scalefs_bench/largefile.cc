@@ -78,6 +78,7 @@ void parse_arg(int argc, char **argv) {
       break;
     case 'k':
       shm_keys_str = optarg;
+      break;
     default:
       print_usage_and_exit();
     }

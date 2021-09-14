@@ -50,8 +50,8 @@ void print_usage_and_exit() {
       "    [-y sync_when]: when to syn/Fsync; only valid with `--bench'\n"
       "        `sync_when' can be:\n"
       "          %d: no sync\n"
-      "          %d: sync after Unlink\n"
-      "          %d: sync after create and Unlink\n"
+      "          %d: sync after unlink\n"
+      "          %d: sync after create and unlink\n"
       "          %d: Fsync during create\n"
       "    [-k keys]: shared memory keys; only valid with `--bench' and uFS APIs\n\n",
       SYNC_NONE, SYNC_UNLINK, SYNC_CREATE_UNLINK, FSYNC_CREATE);
@@ -75,7 +75,7 @@ void parse_arg(int argc, char **argv) {
   }
 
   optind = 2;
-  while ((ch = getopt(argc, argv, "p::d:f:c:y:")) != -1) {
+  while ((ch = getopt(argc, argv, "p::d:f:c:y:k:")) != -1) {
     switch (ch) {
     case 'p':
       per_cpu_dirs = 1;
@@ -96,6 +96,7 @@ void parse_arg(int argc, char **argv) {
       break;
     case 'k':
       shm_keys_str = optarg;
+      break;
     default:
       print_usage_and_exit();
     }

@@ -102,9 +102,9 @@ int Open(const char *pathname, int flags, mode_t mode = 0) {
 #define Free(ptr) fs_free(ptr)
 #define MAX_SHM_KEYS 20
 #define SHM_KEY_BASE 20190301
-void initFs(const char* keys_str) {
+void initFs(char* keys_str) {
   if (!keys_str) {
-    fprintf(stderr, "Shared memory keys not provided!");
+    fprintf(stderr, "Shared memory keys not provided!\n");
     exit(1);
   }
   key_t keys[MAX_SHM_KEYS] = {0}; // 20 should be large enough (max number of workers)
@@ -116,12 +116,13 @@ void initFs(const char* keys_str) {
       exit(1);
     }
     keys[len] = atoi(token);
-    if (!keys(len)) {
+    if (!keys[len]) {
       fprintf(stderr, "Invalid key: %s\n", token);
       exit(1);
     }
-    keys(len) += SHM_KEY_BASE;
+    keys[len] += SHM_KEY_BASE;
     ++len;
+    token = strtok(NULL, ",");
   }
   if (fs_init_multi(len, keys) < 0) {
     fprintf(stderr, "fs_init() error\n");

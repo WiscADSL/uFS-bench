@@ -61,6 +61,7 @@ def cleanup():
     subprocess.call(["killall", "smallfile"])
     subprocess.call(["killall", "cfs_bench_coordinator"])
     subprocess.call(["killall", "fsMain"])
+    subprocess.call("rm -rf /dev/shm/*", shell=True)
     if is_ufs:
         ret = subprocess.call([MKFS_SPDK_BIN, "mkfs"])
         assert ret == 0
@@ -90,19 +91,21 @@ def prep_config():
         f.write('dev_name = "spdkSSD";\ncore_mask = "0x2";\nshm_id = "9";\n')
 
 
-# Use same number of workers as apps
-def start_fsp(num_app, fsp_out):
+def start_fsp(num_worker, num_app, fsp_out):
     fsp_command = [CFS_MAIN_BIN_NAME]
+    fsp_command.append(str(num_worker))
     fsp_command.append(str(num_app))
-    fsp_command.append(str(num_app))
-    offset_string = ",".join(str(10 * j + 1) for j in range(num_app))
+    # shm offset for workers: 101, 201, 301, etc...
+    # this gives us enough space of encoding app id
+    shm_offset_list = list(100 * j + 1 for j in range(num_worker))
+    offset_string = ",".join(str(s) for s in shm_offset_list)
     fsp_command.append(offset_string)
     fsp_command.append(exit_fname)
     fsp_command.append("/tmp/spdk.conf")
     # pin workers to 11, 12, 13, etc. (1-based index)
-    offset_string = ",".join(str(num_cpu + j + 1) for j in range(num_app))
+    pin_core_str = ",".join(str(num_cpu + j + 1) for j in range(num_app))
     logging.info(
-        f"Pin uFS Server workers to cores: {offset_string} (1-based index)")
+        f"Pin uFS Server workers to cores: {pin_core_str} (1-based index)")
     fsp_command.append(offset_string)
     fsp_command.append("/tmp/fsp.conf")
     print(fsp_command)
@@ -115,7 +118,7 @@ def start_fsp(num_app, fsp_out):
         if fs_proc.poll() is not None:
             raise RuntimeError("uFS Server exits unexpectedly")
         time.sleep(0.1)
-    return fs_proc
+    return fs_proc, shm_offset_list
 
 
 def shutdown_fsp(fs_proc):
@@ -137,24 +140,44 @@ def start_coord(num_app):
 
 
 def run_smallfile(nc):
+    next_aid = 0
+    num_worker = nc
+    num_app = nc + 1  # one app for prep
     curr_log_dir = f"{log_dir}/smallfile_ncpu-{nc}"
     os.mkdir(curr_log_dir)
     if is_ufs:
         with open(f"{curr_log_dir}/fsp.log", "w") as f:
-            fs_proc = start_fsp(nc + 1, f)
-    ret = subprocess.call(["build/smallfile", "--prep", exper_dir])
+            fs_proc, shm_offset_list = start_fsp(num_worker, num_app, f)
+        aid = next_aid
+        next_aid += 1
+        cmd = [
+            "build/smallfile", "--prep", "-k",
+            ",".join(str(s + aid) for s in shm_offset_list), exper_dir
+        ]
+    else:
+        cmd = ["build/smallfile", "--prep", exper_dir]
+    ret = subprocess.call(cmd)
     assert ret == 0
 
     curr_log_subdir = f"{curr_log_dir}/create"
+    os.mkdir(curr_log_subdir)
     coord_proc = start_coord(nc)
     bench_list = []
     for c in range(nc):
         with open(f"{curr_log_subdir}/core-{c}.log", "w") as f:
-            cmd = [
-                "build/smallfile", "--bench", "-y", "3", "-c",
-                str(c), "-k", ",".join(str(i * 10 + c + 1) for i in range(nc)),
-                exper_dir
-            ]
+            if is_ufs:
+                aid = next_aid
+                next_aid += 1
+                cmd = [
+                    "build/smallfile", "--bench", "-y", "3", "-c",
+                    str(c), "-k",
+                    ",".join(str(s + aid) for s in shm_offset_list), exper_dir
+                ]
+            else:
+                cmd = [
+                    "build/smallfile", "--bench", "-y", "3", "-c",
+                    str(c), exper_dir
+                ]
             logging.info(f"Start app: {cmd}")
             p = subprocess.Popen(cmd, stdout=f)
         bench_list.append(p)
@@ -166,28 +189,50 @@ def run_smallfile(nc):
         assert ret == 0
     if is_ufs:
         shutdown_fsp(fs_proc)
+    assert num_app == next_aid
 
 
 def run_largefile(nc):
+    next_aid = 0
+    num_worker = nc
+    num_app = 2 * nc + 1  # one app for prep
     curr_log_dir = f"{log_dir}/largefile_ncpu-{nc}"
     os.mkdir(curr_log_dir)
     if is_ufs:
         with open(f"{curr_log_dir}/fsp.log", "w") as f:
-            fs_proc = start_fsp(2 * nc + 1, f)
+            fs_proc, shm_offset_list = start_fsp(num_worker, num_app, f)
+        aid = next_aid
+        next_aid += 1
+        cmd = [
+            "build/largefile", "--prep", "-k",
+            ",".join(str(s + aid) for s in shm_offset_list), exper_dir
+        ]
+    else:
+        cmd = ["build/largefile", "--prep", exper_dir]
     ret = subprocess.call(["build/largefile", "--prep", exper_dir])
     assert ret == 0
 
     for workload in ["create", "overwrite"]:
         curr_log_subdir = f"{curr_log_dir}/{workload}"
+        os.mkdir(curr_log_subdir)
         coord_proc = start_coord(nc)
         bench_list = []
         for c in range(nc):
             with open(f"{curr_log_subdir}/core-{c}.log", "w") as f:
-                cmd = [
-                    "build/largefile", "--bench", workload, "-c",
-                    str(c), "-k",
-                    ",".join(str(i * 10 + c + 1) for i in range(nc)), exper_dir
-                ]
+                if is_ufs:
+                    aid = next_aid
+                    next_aid += 1
+                    cmd = [
+                        "build/largefile", "--bench", workload, "-c",
+                        str(c), "-k",
+                        ",".join(str(s + aid) for s in shm_offset_list),
+                        exper_dir
+                    ]
+                else:
+                    cmd = [
+                        "build/largefile", "--bench", workload, "-c",
+                        str(c), exper_dir
+                    ]
                 logging.info(f"Start app: {cmd}")
                 p = subprocess.Popen(cmd, stdout=f)
             bench_list.append(p)
