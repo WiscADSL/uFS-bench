@@ -27,6 +27,7 @@ int pin_core = -1;
 char *topdir = NULL;
 char *buf = NULL;
 int total_cores = -1;
+char* shm_keys_str = NULL;
 
 void run_benchmark(int cpu);
 void create_dirs(const char *topdir, unsigned long num_dirs);
@@ -51,7 +52,8 @@ void print_usage_and_exit() {
       "          %d: no sync\n"
       "          %d: sync after Unlink\n"
       "          %d: sync after create and Unlink\n"
-      "          %d: Fsync during create\n\n",
+      "          %d: Fsync during create\n"
+      "    [-k keys]: shared memory keys; only valid with `--bench' and uFS APIs\n\n",
       SYNC_NONE, SYNC_UNLINK, SYNC_CREATE_UNLINK, FSYNC_CREATE);
   exit(1);
 }
@@ -92,6 +94,8 @@ void parse_arg(int argc, char **argv) {
     case 'y': // When to call Sync()
       sync_when = atoi(optarg);
       break;
+    case 'k':
+      shm_keys_str = optarg;
     default:
       print_usage_and_exit();
     }
@@ -135,7 +139,13 @@ void parse_arg(int argc, char **argv) {
 int main(int argc, char **argv) {
   parse_arg(argc, argv);
 
-  initFs();
+#ifdef USE_UFS
+  printf("INFO: using uFS APIs\n");
+#else
+  printf("INFO: using POSIX APIs\n");
+#endif
+
+  initFs(shm_keys_str);
 
   if (is_prep) {
     /* Create the directories for the files to be spread amongst */

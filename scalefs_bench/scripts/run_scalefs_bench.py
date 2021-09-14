@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import time
+import logging
 
 COORD_PATH = f"{os.environ['CFS_ROOT_DIR']}/cfs_bench/build/bins/cfs_bench_coordinator"
 MKFS_SPDK_BIN = os.environ['MKFS_SPDK_BIN']
@@ -9,6 +10,7 @@ CFS_MAIN_BIN_NAME = os.environ['CFS_MAIN_BIN_NAME']
 
 # 1-based index
 coord_pin_core = 21
+num_cpu = 10
 
 
 def print_usage_and_exit(argv0):
@@ -31,7 +33,6 @@ if len(sys.argv) == 5:
     else:
         print(f"Unknown argument: {sys.argv[4]}")
         print_usage_and_exit()
-num_cpu = 10
 
 if bench == "smallfile":
     is_small = True
@@ -94,11 +95,14 @@ def start_fsp(num_app, fsp_out):
     fsp_command = [CFS_MAIN_BIN_NAME]
     fsp_command.append(str(num_app))
     fsp_command.append(str(num_app))
-    offset_string = ",".join(str(10 * j + 1) for j in range(0, num_app))
+    offset_string = ",".join(str(10 * j + 1) for j in range(num_app))
     fsp_command.append(offset_string)
     fsp_command.append(exit_fname)
     fsp_command.append("/tmp/spdk.conf")
-    offset_string = ",".join(str(j + 1) for j in range(0, num_app))
+    # pin workers to 11, 12, 13, etc. (1-based index)
+    offset_string = ",".join(str(num_cpu + j + 1) for j in range(num_app))
+    logging.info(
+        f"Pin uFS Server workers to cores: {offset_string} (1-based index)")
     fsp_command.append(offset_string)
     fsp_command.append("/tmp/fsp.conf")
     print(fsp_command)
@@ -120,11 +124,12 @@ def shutdown_fsp(fs_proc):
         f.write('Apparate')  # This is just for fun :)
     fs_proc.wait()
     # this kill should return non-zero for not finding fsMain...
-    if subprocess.run(["pkill", "fsMain"]).returncode == 0:
+    if subprocess.call(["pkill", "fsMain"]) == 0:
         print("WARN: Detect fsMain after shutdown; kill...")
 
 
 def start_coord(num_app):
+    logging.info(f"Start coordinator on core {coord_pin_core} (1-based index)")
     return subprocess.Popen(
         [COORD_PATH, "-n",
          str(num_app), "-c",
@@ -145,12 +150,15 @@ def run_smallfile(nc):
     bench_list = []
     for c in range(nc):
         with open(f"{curr_log_subdir}/core-{c}.log", "w") as f:
-            p = subprocess.Popen([
+            cmd = [
                 "build/smallfile", "--bench", "-y", "3", "-c",
-                str(c), exper_dir
-            ],
-                                 stdout=f)
-            bench_list.append(p)
+                str(c), "-k", ",".join(str(i * 10 + c + 1) for i in range(nc)),
+                exper_dir
+            ]
+            logging.info(f"Start app: {cmd}")
+            p = subprocess.Popen(cmd, stdout=f)
+        bench_list.append(p)
+        logging.info(f"Pin smallfile on core {c} (0-based index)")
     ret = coord_proc.wait()
     assert ret == 0
     for b in bench_list:
@@ -175,12 +183,16 @@ def run_largefile(nc):
         bench_list = []
         for c in range(nc):
             with open(f"{curr_log_subdir}/core-{c}.log", "w") as f:
-                p = subprocess.Popen([
+                cmd = [
                     "build/largefile", "--bench", workload, "-c",
-                    str(c), exper_dir
-                ],
-                                     stdout=f)
-                bench_list.append(p)
+                    str(c), "-k",
+                    ",".join(str(i * 10 + c + 1) for i in range(nc)), exper_dir
+                ]
+                logging.info(f"Start app: {cmd}")
+                p = subprocess.Popen(cmd, stdout=f)
+            bench_list.append(p)
+            logging.info(
+                f"Pin largefile-{workload} on core {c} (0-based index)")
         ret = coord_proc.wait()
         assert ret == 0
         for b in bench_list:
@@ -190,6 +202,7 @@ def run_largefile(nc):
         shutdown_fsp(fs_proc)
 
 
+logging.basicConfig(level=logging.INFO)
 if is_ufs:
     prep_config()
 for nc in range(1, num_cpu + 1):

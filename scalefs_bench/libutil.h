@@ -100,6 +100,38 @@ int Open(const char *pathname, int flags, mode_t mode = 0) {
   fs_allocated_pwrite(fd, buf, count, offset)
 #define Malloc(size) fs_malloc(size)
 #define Free(ptr) fs_free(ptr)
+#define MAX_SHM_KEYS 20
+#define SHM_KEY_BASE 20190301
+void initFs(const char* keys_str) {
+  if (!keys_str) {
+    fprintf(stderr, "Shared memory keys not provided!");
+    exit(1);
+  }
+  key_t keys[MAX_SHM_KEYS] = {0}; // 20 should be large enough (max number of workers)
+  int len = 0;
+  char *token = strtok(keys_str, ",");
+  while (token) {
+    if (len >= MAX_SHM_KEYS) {
+      fprintf(stderr, "Too much keys!\n");
+      exit(1);
+    }
+    keys[len] = atoi(token);
+    if (!keys(len)) {
+      fprintf(stderr, "Invalid key: %s\n", token);
+      exit(1);
+    }
+    keys(len) += SHM_KEY_BASE;
+    ++len;
+  }
+  if (fs_init_multi(len, keys) < 0) {
+    fprintf(stderr, "fs_init() error\n");
+    exit(1);
+  }
+}
+void exitFs() {
+  if (fs_exit() < 0)
+    fprintf(stderr, "fs_exit() error\n");
+}
 
 #else // use POSIX apis
 #define Stat(pathname, statbuf) stat(pathname, statbuf)
@@ -122,20 +154,6 @@ int Open(const char *pathname, int flags) { return open(pathname, flags); }
 #define Pwrite(fd, buf, count, offset) pwrite(fd, buf, count, offset)
 #define Malloc(size) malloc(size)
 #define Free(ptr) free(ptr)
+void initFs(const char* keys_str) {}
+void exitFs() {}
 #endif // USE_UFS
-
-void initFs() {
-#ifdef USE_UFS
-  if (fs_register() < 0) {
-    fprintf(stderr, "fs_init() error\n");
-    exit(1);
-  }
-#endif
-}
-
-void exitFs() {
-#ifdef USE_UFS
-  if (fs_exit() < 0)
-    fprintf(stderr, "fs_exit() error\n");
-#endif
-}

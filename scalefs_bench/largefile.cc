@@ -14,6 +14,7 @@ char *topdir = NULL;
 char *buf = NULL;
 unsigned long file_size = FILESIZE;
 int total_cores = -1;
+char* shm_keys_str = NULL;
 
 void run_createfile_benchmark(int cpu);
 void run_overwritefile_benchmark(int cpu);
@@ -30,7 +31,8 @@ void print_usage_and_exit() {
       "    [-p [total_cores]]: creates files under per-cpu sub-directories;\n"
       "        if with `--prep', must specify how many cores will be used\n"
       "    [-c core]: core id to pin; only valid with `--bench'\n"
-      "    [-z size]: file size to create in MB (default 100); only valid with `--bench'\n\n");
+      "    [-z size]: file size to create in MB (default 100); only valid with `--bench'\n"
+      "    [-k keys]: shared memory keys; only valid with `--bench' and uFS APIs\n\n");
   exit(1);
 }
 
@@ -61,7 +63,7 @@ void parse_arg(int argc, char **argv) {
     print_usage_and_exit();
   }
 
-  while ((ch = getopt(argc, argv, "p::c:z:")) != -1) {
+  while ((ch = getopt(argc, argv, "p::c:z:k:")) != -1) {
     switch (ch) {
     case 'p':
       per_cpu_dirs = 1;
@@ -74,6 +76,8 @@ void parse_arg(int argc, char **argv) {
     case 'z':
       file_size = ((unsigned long)atoi(optarg)) << 20;
       break;
+    case 'k':
+      shm_keys_str = optarg;
     default:
       print_usage_and_exit();
     }
@@ -108,7 +112,13 @@ void parse_arg(int argc, char **argv) {
 int main(int argc, char **argv) {
   parse_arg(argc, argv);
 
-  initFs();
+#ifdef USE_UFS
+  printf("INFO: using uFS APIs\n");
+#else
+  printf("INFO: using POSIX APIs\n");
+#endif
+
+  initFs(shm_keys_str);
 
   if (is_prep) {
     create_dirs(topdir);
