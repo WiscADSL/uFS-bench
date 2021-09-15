@@ -156,6 +156,7 @@ def run_smallfile(nc):
         ]
     else:
         cmd = ["build/smallfile", "--prep", exper_dir]
+    logging.info(f"Start prep: {cmd}")
     ret = subprocess.call(cmd)
     assert ret == 0
 
@@ -209,7 +210,8 @@ def run_largefile(nc):
         ]
     else:
         cmd = ["build/largefile", "--prep", exper_dir]
-    ret = subprocess.call(["build/largefile", "--prep", exper_dir])
+    logging.info(f"Start prep: {cmd}")
+    ret = subprocess.call(cmd)
     assert ret == 0
 
     for workload in ["create", "overwrite"]:
@@ -256,7 +258,6 @@ for nc in range(1, num_cpu + 1):
     if is_small:
         run_smallfile(nc)
     else:
-        run_largefile(nc, "create")
-        run_largefile(nc, "overwrite")
+        run_largefile(nc)
 if not no_cleanup:
     cleanup()

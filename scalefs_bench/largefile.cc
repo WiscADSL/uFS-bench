@@ -48,6 +48,7 @@ void parse_arg(int argc, char **argv) {
     optind = 2;
   } else if (strcmp(argv[1], "--bench") == 0) {
     is_prep = 0;
+    optind = 3;
     if (strcmp(argv[2], "create") == 0) {
       is_overwrite = 0;
     } else if (strcmp(argv[2], "overwrite") == 0) {
@@ -57,7 +58,6 @@ void parse_arg(int argc, char **argv) {
               "`--bench' must specify the workload type (create/overwrite)!\n");
       print_usage_and_exit();
     }
-    optind = 3;
   } else {
     fprintf(stderr, "Must specify `--prep' or `--bench'!\n");
     print_usage_and_exit();
@@ -154,13 +154,15 @@ void run_createfile_benchmark(int cpu) {
   cc.notify_server_that_client_is_ready();
   cc.wait_till_server_says_start();
   uint64_t usec = create_largefile(topdir, buf, cpu);
+  cc.notify_server_that_client_stopped();
+
   float sec = ((float) usec) / 1000000.0;
   float tp = ((float)(file_size >> 20)) / sec;
   printf("Test            Time(sec)       MB/sec\n");
   printf("----            ---------       ---------\n");
 	printf("create_files    %7.3f\t\t%7.3f\n",
 		sec, tp);
-
+  fflush(stdout);
 }
 
 void run_overwritefile_benchmark(int cpu) {
@@ -170,12 +172,15 @@ void run_overwritefile_benchmark(int cpu) {
   cc.notify_server_that_client_is_ready();
   cc.wait_till_server_says_start();
   int64_t usec = overwrite_largefile(topdir, buf, cpu);
+  cc.notify_server_that_client_stopped();
+
   float sec = ((float) usec) / 1000000.0;
   float tp = ((float)(file_size >> 20)) / sec;
   printf("Test            Time(sec)       MB/sec\n");
   printf("----            ---------       ---------\n");
   printf("overwrite_files %7.3f\t\t%7.3f\n",
 		sec, tp);
+  fflush(stdout);
 }
 
 void create_dirs(const char *topdir) {
@@ -237,16 +242,16 @@ uint64_t create_largefile(const char *topdir, char *buf, int cpu) {
   int fd = Open(filename, O_WRONLY | O_CREAT | O_EXCL,
                 S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
   if (fd < 0)
-    die("Open");
+    die("Open %s failed\n", filename);
 
   int count = file_size / IOSIZE;
   for (int i = 0; i < count; i++) {
     if (Write(fd, buf, IOSIZE) != IOSIZE)
-      die("Write");
+      die("Write %s failed\n", filename);
   }
 
   if (Fsync(fd) < 0)
-    die("Fsync");
+    die("Fsync %s failed\n", filename);
 
   Close(fd);
   after = now_usec();
@@ -266,19 +271,19 @@ uint64_t overwrite_largefile(const char *topdir, char *buf, int cpu) {
 
   int fd = Open(filename, O_WRONLY);
   if (fd < 0)
-    die("Open");
+    die("Open %s failed\n", filename);
 
   if (Lseek(fd, 0, SEEK_SET) < 0)
-    die("Lseek");
+    die("Lseek %s failed\n", filename);
 
   int count = file_size / IOSIZE;
   for (int i = 0; i < count; i++) {
     if (Write(fd, buf, IOSIZE) != IOSIZE)
-      die("Write");
+      die("Write %s failed\n", filename);
   }
 
   if (Fsync(fd) < 0)
-    die("Fsync");
+    die("Fsync %s failed\n", filename);
 
   Close(fd);
   after = now_usec();

@@ -327,17 +327,17 @@ uint64_t create_files(const char *topdir, char *buf, int cpu) {
               S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
     if (fd == -1)
-      die("Open");
+      die("Open %s failed\n", filename);
 
     size = Write(fd, buf, FILESIZE);
     if (size == -1)
-      die("Write");
+      die("Write %s failed\n", filename);
 
     if (sync_when == FSYNC_CREATE && Fsync(fd) < 0)
-      die("Fsync");
+      die("Fsync %s failed\n", filename);
 
     if (Close(fd) < 0)
-      die("Close");
+      die("Close %s failed\n", filename);
 
     if ((i + 1) % nfiles_per_dir == 0)
       j++;
@@ -364,14 +364,14 @@ uint64_t read_files(const char *topdir, char *buf, int cpu) {
 
     fd = Open(filename, O_RDONLY);
     if (fd == -1)
-      die("Open");
+      die("Open %s failed\n", filename);
 
     size = Read(fd, buf, FILESIZE);
     if (size == -1)
-      die("Read");
+      die("Read %s failed\n", filename);
 
     if (Close(fd) < 0)
-      die("Close");
+      die("Close %s failed\n", filename);
 
     if ((i + 1) % nfiles_per_dir == 0)
       j++;
@@ -397,7 +397,7 @@ uint64_t unlink_files(const char *topdir, char *buf, int cpu) {
 
     ret = Unlink(filename);
     if (ret == -1)
-      die("Unlink");
+      die("Unlink %s failed\n", filename);
 
     if ((i + 1) % nfiles_per_dir == 0)
       j++;
