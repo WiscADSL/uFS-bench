@@ -122,10 +122,16 @@ def start_fsp(num_worker, num_app, fsp_out):
 
 
 def shutdown_fsp(fs_proc):
+    fsp_shutdown_timeout = 15
     # Create a exit file to signal server
     with open(exit_fname, 'w+') as f:
         f.write('Apparate')  # This is just for fun :)
-    fs_proc.wait()
+    try:
+        fs_proc.wait(fsp_shutdown_timeout)
+    except subprocess.TimeoutExpired:
+        print(f"WARN: uFS server doesn't exit after {fsp_shutdown_timeout} seconds; will enforce shutdown")
+        subprocess.run(["pkill", "fsMain"])
+
     # this kill should return non-zero for not finding fsMain...
     if subprocess.call(["pkill", "fsMain"]) == 0:
         print("WARN: Detect fsMain after shutdown; kill...")
@@ -194,9 +200,13 @@ def run_smallfile(nc):
 
 
 def run_largefile(nc):
+    ## The original scalefs has "overwrite" bench code but not reported in the
+    ## paper. Here we also skip "overwrite" and only bench "create".
+    # workload_list = ["create", "overwrite"]
+    workload_list = ["create"]
     next_aid = 0
     num_worker = nc
-    num_app = 2 * nc + 1  # one app for prep
+    num_app = len(workload_list) * nc + 1  # one app for prep
     curr_log_dir = f"{log_dir}/largefile_ncpu-{nc}"
     os.mkdir(curr_log_dir)
     if is_ufs:
@@ -214,7 +224,7 @@ def run_largefile(nc):
     ret = subprocess.call(cmd)
     assert ret == 0
 
-    for workload in ["create", "overwrite"]:
+    for workload in workload_list:
         curr_log_subdir = f"{curr_log_dir}/{workload}"
         os.mkdir(curr_log_subdir)
         coord_proc = start_coord(nc)

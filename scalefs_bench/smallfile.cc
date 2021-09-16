@@ -16,18 +16,18 @@ enum SyncOption {
 
 const char *sync_options[] = {"SYNC_NONE", "SYNC_UNLINK", "SYNC_CREATE_UNLINK",
                               "FSYNC_CREATE"};
-int sync_when = SYNC_UNLINK; // default
+int sync_when = SYNC_UNLINK;  // default
 unsigned long num_files = NUMFILES;
 unsigned long num_dirs = NUMDIRS;
 unsigned long nfiles_per_dir;
 unsigned long timer_overhead = 0;
 int per_cpu_dirs = 0;
-int is_prep; // prep or bench
+int is_prep;  // prep or bench
 int pin_core = -1;
 char *topdir = NULL;
 char *buf = NULL;
 int total_cores = -1;
-char* shm_keys_str = NULL;
+char *shm_keys_str = NULL;
 
 void run_benchmark(int cpu);
 void create_dirs(const char *topdir, unsigned long num_dirs);
@@ -53,7 +53,8 @@ void print_usage_and_exit() {
       "          %d: sync after unlink\n"
       "          %d: sync after create and unlink\n"
       "          %d: Fsync during create\n"
-      "    [-k keys]: shared memory keys; only valid with `--bench' and uFS APIs\n\n",
+      "    [-k keys]: shared memory keys; only valid with `--bench' and uFS "
+      "APIs\n\n",
       SYNC_NONE, SYNC_UNLINK, SYNC_CREATE_UNLINK, FSYNC_CREATE);
   exit(1);
 }
@@ -63,8 +64,7 @@ void parse_arg(int argc, char **argv) {
   extern char *optarg;
   extern int optind;
 
-  if (argc < 3)
-    print_usage_and_exit();
+  if (argc < 3) print_usage_and_exit();
   if (strcmp(argv[1], "--prep") == 0) {
     is_prep = 1;
   } else if (strcmp(argv[1], "--bench") == 0) {
@@ -77,33 +77,31 @@ void parse_arg(int argc, char **argv) {
   optind = 2;
   while ((ch = getopt(argc, argv, "p::d:f:c:y:k:")) != -1) {
     switch (ch) {
-    case 'p':
-      per_cpu_dirs = 1;
-      if (optarg)
-        total_cores = atoi(optarg);
-      break;
-    case 'd':
-      num_dirs = atoi(optarg);
-      break;
-    case 'f':
-      num_files = atoi(optarg);
-      break;
-    case 'c':
-      pin_core = atoi(optarg);
-      break;
-    case 'y': // When to call Sync()
-      sync_when = atoi(optarg);
-      break;
-    case 'k':
-      shm_keys_str = optarg;
-      break;
-    default:
-      print_usage_and_exit();
+      case 'p':
+        per_cpu_dirs = 1;
+        if (optarg) total_cores = atoi(optarg);
+        break;
+      case 'd':
+        num_dirs = atoi(optarg);
+        break;
+      case 'f':
+        num_files = atoi(optarg);
+        break;
+      case 'c':
+        pin_core = atoi(optarg);
+        break;
+      case 'y':  // When to call Sync()
+        sync_when = atoi(optarg);
+        break;
+      case 'k':
+        shm_keys_str = optarg;
+        break;
+      default:
+        print_usage_and_exit();
     }
   }
   topdir = argv[optind];
-  if (!topdir)
-    print_usage_and_exit();
+  if (!topdir) print_usage_and_exit();
 
   if (is_prep) {
     if (per_cpu_dirs && total_cores < 0) {
@@ -146,8 +144,10 @@ int main(int argc, char **argv) {
   printf("INFO: using POSIX APIs\n");
 #endif
 
-  initFs(shm_keys_str);
+  int num_workers = 0;
+  int aid = initFs(shm_keys_str, num_workers);
 
+  buf = (char *)Malloc(FILESIZE);
   if (is_prep) {
     /* Create the directories for the files to be spread amongst */
     create_dirs(topdir, num_dirs);
@@ -155,17 +155,25 @@ int main(int argc, char **argv) {
     goto done;
   }
 
-  buf = (char *)Malloc(FILESIZE);
   if (!buf) {
     fprintf(stderr, "ERROR: Failed to allocate buffer");
     exit(1);
   }
-  for (int i = 0; i < FILESIZE; i++)
-		buf[i] = 'a';
+
+  if ((aid - 1) % num_workers != 0) {
+    int target = (aid - 1) % num_workers;
+    fprintf(stderr, "fileset reassigned to worker:%d num_workers:%d str:%s\n",
+            target, num_workers, shm_keys_str);
+    fs_admin_thread_reassign(0, target, FS_REASSIGN_FUTURE);
+  }
+  for (int i = 0; i < FILESIZE; i++) {
+    buf[i] = 'a';
+  }
   run_benchmark(pin_core);
-  Free(buf);
 
 done:
+  fprintf(stderr, "done: aid: %d\n", aid);
+  Free(buf);
   exitFs();
   return 0;
 }
@@ -190,8 +198,7 @@ void run_benchmark(int cpu) {
 
   create_usec = create_files(topdir, buf, cpu);
 
-  if (sync_when == SYNC_CREATE_UNLINK)
-    sync1_usec = sync_files();
+  if (sync_when == SYNC_CREATE_UNLINK) sync1_usec = sync_files();
 
   read_usec = read_files(topdir, buf, cpu);
   unlink_usec = unlink_files(topdir, buf, cpu);
@@ -252,15 +259,13 @@ void create_dirs(const char *topdir, unsigned long num_dirs) {
 
       fd = Open(sub_dir, O_RDONLY | O_DIRECTORY);
       if (fd >= 0) {
-        if ((ret = Fsync(fd)) < 0)
-          die("Fsync %s failed %d\n", sub_dir, ret);
+        if ((ret = Fsync(fd)) < 0) die("Fsync %s failed %d\n", sub_dir, ret);
         Close(fd);
       }
 
       fd = Open(topdir, O_RDONLY | O_DIRECTORY);
       if (fd >= 0) {
-        if ((ret = Fsync(fd)) < 0)
-          die("Fsync %s failed %d\n", topdir, ret);
+        if ((ret = Fsync(fd)) < 0) die("Fsync %s failed %d\n", topdir, ret);
         Close(fd);
       }
 
@@ -271,36 +276,31 @@ void create_dirs(const char *topdir, unsigned long num_dirs) {
 
         fd = Open(dir, O_RDONLY | O_DIRECTORY);
         if (fd >= 0) {
-          if ((ret = Fsync(fd)) < 0)
-            die("Fsync %s failed %d\n", dir, ret);
+          if ((ret = Fsync(fd)) < 0) die("Fsync %s failed %d\n", dir, ret);
           Close(fd);
         }
       }
 
       fd = Open(sub_dir, O_RDONLY | O_DIRECTORY);
       if (fd >= 0) {
-        if ((ret = Fsync(fd)) < 0)
-          die("Fsync %s failed %d\n", sub_dir, ret);
+        if ((ret = Fsync(fd)) < 0) die("Fsync %s failed %d\n", sub_dir, ret);
         Close(fd);
       }
     }
   } else {
     for (i = 0; i < num_dirs; i++) {
       snprintf(dir, 128, "%s/dir-%ld", topdir, i);
-      if ((ret = Mkdir(dir, 0777)) != 0)
-        die("Mkdir %s failed %d\n", dir, ret);
+      if ((ret = Mkdir(dir, 0777)) != 0) die("Mkdir %s failed %d\n", dir, ret);
 
       fd = Open(dir, O_RDONLY | O_DIRECTORY);
       if (fd >= 0) {
-        if ((ret = Fsync(fd)) < 0)
-          die("Fsync %s failed %d\n", dir, ret);
+        if ((ret = Fsync(fd)) < 0) die("Fsync %s failed %d\n", dir, ret);
         Close(fd);
       }
 
       fd = Open(topdir, O_RDONLY | O_DIRECTORY);
       if (fd >= 0) {
-        if ((ret = Fsync(fd)) < 0)
-          die("Fsync %s failed %d\n", topdir, ret);
+        if ((ret = Fsync(fd)) < 0) die("Fsync %s failed %d\n", topdir, ret);
         Close(fd);
       }
     }
@@ -326,21 +326,17 @@ uint64_t create_files(const char *topdir, char *buf, int cpu) {
     fd = Open(filename, O_WRONLY | O_CREAT | O_EXCL,
               S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
-    if (fd == -1)
-      die("Open %s failed\n", filename);
+    if (fd == -1) die("Open %s failed\n", filename);
 
     size = Write(fd, buf, FILESIZE);
-    if (size == -1)
-      die("Write %s failed\n", filename);
+    if (size == -1) die("Write %s failed\n", filename);
 
     if (sync_when == FSYNC_CREATE && Fsync(fd) < 0)
       die("Fsync %s failed\n", filename);
 
-    if (Close(fd) < 0)
-      die("Close %s failed\n", filename);
+    if (Close(fd) < 0) die("Close %s failed\n", filename);
 
-    if ((i + 1) % nfiles_per_dir == 0)
-      j++;
+    if ((i + 1) % nfiles_per_dir == 0) j++;
   }
   after = now_usec();
   return after - before - timer_overhead;
@@ -363,18 +359,14 @@ uint64_t read_files(const char *topdir, char *buf, int cpu) {
       snprintf(filename, 128, "%s/dir-%ld/file-%d-%ld", topdir, j, cpu, i);
 
     fd = Open(filename, O_RDONLY);
-    if (fd == -1)
-      die("Open %s failed\n", filename);
+    if (fd == -1) die("Open %s failed\n", filename);
 
     size = Read(fd, buf, FILESIZE);
-    if (size == -1)
-      die("Read %s failed\n", filename);
+    if (size == -1) die("Read %s failed\n", filename);
 
-    if (Close(fd) < 0)
-      die("Close %s failed\n", filename);
+    if (Close(fd) < 0) die("Close %s failed\n", filename);
 
-    if ((i + 1) % nfiles_per_dir == 0)
-      j++;
+    if ((i + 1) % nfiles_per_dir == 0) j++;
   }
   after = now_usec();
   return after - before - timer_overhead;
@@ -396,11 +388,9 @@ uint64_t unlink_files(const char *topdir, char *buf, int cpu) {
       snprintf(filename, 128, "%s/dir-%ld/file-%d-%ld", topdir, j, cpu, i);
 
     ret = Unlink(filename);
-    if (ret == -1)
-      die("Unlink %s failed\n", filename);
+    if (ret == -1) die("Unlink %s failed\n", filename);
 
-    if ((i + 1) % nfiles_per_dir == 0)
-      j++;
+    if ((i + 1) % nfiles_per_dir == 0) j++;
   }
   after = now_usec();
   return after - before - timer_overhead;

@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <sched.h>
 #include <stdarg.h>
-#include <stdexcept>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +13,8 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include <stdexcept>
 
 #ifdef USE_UFS
 #include "fsapi.h"
@@ -49,11 +50,11 @@ void edie(const char *errstr, ...) {
   exit(1);
 }
 
-// It is supposed to make things handy, but somehow scalefs's code doesn't use it...
+// It is supposed to make things handy, but somehow scalefs's code doesn't use
+// it...
 uint64_t now_usec(void) {
   struct timeval tv;
-  if (gettimeofday(&tv, NULL) < 0)
-    edie("gettimeofday");
+  if (gettimeofday(&tv, NULL) < 0) edie("gettimeofday");
   return ((uint64_t)tv.tv_sec) * 1000000ull + ((uint64_t)tv.tv_usec);
 }
 
@@ -68,12 +69,16 @@ int setaffinity(int c) {
 
 #define NTEST 100000 /* No. of tests of gettimeofday() */
 
+// Technically, this function is a little ill-shaped as the for-loop could be
+// optimized out and return a zero... but even without optimization, this
+// function will probably still return zero (<1 us)...
+// Since scalefs has this piece of code for their benchmarks, we just leave it
+// here... It does't help, but it doesn't hurt either (hopefully).
 unsigned long get_timer_overhead() {
   uint64_t before, after, dummy;
   unsigned long timer_overhead;
   before = now_usec();
-  for (int i = 0; i < NTEST; i++)
-    dummy = now_usec();
+  for (int i = 0; i < NTEST; i++) dummy = now_usec();
   after = now_usec();
   return (after - before) / NTEST;
 }
@@ -96,18 +101,21 @@ int Open(const char *pathname, int flags, mode_t mode = 0) {
 #define Read(fd, buf, count) fs_allocated_read(fd, buf, count)
 #define Pread(fd, buf, count, offset) fs_allocated_pread(fd, buf, count, offset)
 #define Write(fd, buf, count) fs_allocated_write(fd, buf, count)
-#define Pwrite(fd, buf, count, offset)                                         \
+#define Pwrite(fd, buf, count, offset) \
   fs_allocated_pwrite(fd, buf, count, offset)
 #define Malloc(size) fs_malloc(size)
 #define Free(ptr) fs_free(ptr)
 #define MAX_SHM_KEYS 20
 #define SHM_KEY_BASE 20190301
-void initFs(char* keys_str) {
+// @return aid
+int initFs(char *keys_str, int &num_worker) {
+  int aid = -1;
   if (!keys_str) {
     fprintf(stderr, "Shared memory keys not provided!\n");
     exit(1);
   }
-  key_t keys[MAX_SHM_KEYS] = {0}; // 20 should be large enough (max number of workers)
+  key_t keys[MAX_SHM_KEYS] = {
+      0};  // 20 should be large enough (max number of workers)
   int len = 0;
   char *token = strtok(keys_str, ",");
   while (token) {
@@ -120,21 +128,25 @@ void initFs(char* keys_str) {
       fprintf(stderr, "Invalid key: %s\n", token);
       exit(1);
     }
+    if (len == 0) {
+      aid = keys[len];
+    }
     keys[len] += SHM_KEY_BASE;
     ++len;
     token = strtok(NULL, ",");
   }
+  num_worker = len;
   if (fs_init_multi(len, keys) < 0) {
     fprintf(stderr, "fs_init() error\n");
     exit(1);
   }
+  return aid;
 }
 void exitFs() {
-  if (fs_exit() < 0)
-    fprintf(stderr, "fs_exit() error\n");
+  if (fs_exit() < 0) fprintf(stderr, "fs_exit() error\n");
 }
 
-#else // use POSIX apis
+#else  // use POSIX apis
 #define Stat(pathname, statbuf) stat(pathname, statbuf)
 #define Fstat(fd, statbuf) fstat(fd, statbuf)
 // open is a little special as it may only take two args
@@ -155,6 +167,6 @@ int Open(const char *pathname, int flags) { return open(pathname, flags); }
 #define Pwrite(fd, buf, count, offset) pwrite(fd, buf, count, offset)
 #define Malloc(size) malloc(size)
 #define Free(ptr) free(ptr)
-void initFs(const char* keys_str) {}
+void initFs(const char *keys_str) {}
 void exitFs() {}
-#endif // USE_UFS
+#endif  // USE_UFS
