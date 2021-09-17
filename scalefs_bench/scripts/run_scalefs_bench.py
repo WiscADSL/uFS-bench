@@ -196,7 +196,7 @@ def run_smallfile(nc):
         assert ret == 0
     if is_ufs:
         shutdown_fsp(fs_proc)
-    assert num_app == next_aid
+        assert num_app == next_aid
 
 
 def run_largefile(nc):
@@ -257,7 +257,7 @@ def run_largefile(nc):
             assert ret == 0
     if is_ufs:
         shutdown_fsp(fs_proc)
-    assert num_app == next_aid
+        assert num_app == next_aid
 
 
 logging.basicConfig(level=logging.INFO)
