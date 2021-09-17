@@ -114,12 +114,11 @@ int main(int argc, char **argv) {
 
 #ifdef USE_UFS
   printf("INFO: using uFS APIs\n");
+  int num_workers = 0;
+  int aid = initFs(shm_keys_str, num_workers);
 #else
   printf("INFO: using POSIX APIs\n");
 #endif
-
-  int num_workers = 0;
-  int aid = initFs(shm_keys_str, num_workers);
 
   buf = (char *)Malloc(IOSIZE);
   if (is_prep) {
@@ -133,12 +132,14 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+#ifdef USE_UFS
   if ((aid - 1) % num_workers != 0) {
     int target = (aid - 1) % num_workers;
     fprintf(stderr, "fileset reassigned to worker %d shm_key_str:%s\n", target,
             shm_keys_str);
     fs_admin_thread_reassign(0, target, FS_REASSIGN_FUTURE);
   }
+#endif
 
   for (int i = 0; i < IOSIZE; i++) buf[i] = 'b';
 
@@ -149,7 +150,6 @@ int main(int argc, char **argv) {
   }
 
 done:
-  fprintf(stderr, "done: aid: %d\n", aid);
   Free(buf);
   exitFs();
   return 0;
@@ -238,6 +238,22 @@ uint64_t create_largefile(const char *topdir, char *buf, int cpu) {
   else
     snprintf(filename, 128, "%s/dir/largefile-%d", topdir, cpu);
 
+#ifdef USE_ALL_LEASE
+#ifdef USE_UFS
+  int fd =
+      fs_open_ldb(filename, O_WRONLY | O_CREAT | O_EXCL,
+                  S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+  if (fd < 0) die("Open %s failed\n", filename);
+
+  int count = file_size / IOSIZE;
+  for (int i = 0; i < count; i++) {
+    if (fs_allocated_write_ldb(fd, buf, IOSIZE) != IOSIZE)
+      die("Write %s failed\n", filename);
+  }
+  if (fs_wsync(fd) < 0) die("Fsync %s failed\n", filename);
+  fs_close_ldb(fd);
+#endif
+#else
   int fd = Open(filename, O_WRONLY | O_CREAT | O_EXCL,
                 S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
   if (fd < 0) die("Open %s failed\n", filename);
@@ -246,10 +262,10 @@ uint64_t create_largefile(const char *topdir, char *buf, int cpu) {
   for (int i = 0; i < count; i++) {
     if (Write(fd, buf, IOSIZE) != IOSIZE) die("Write %s failed\n", filename);
   }
-
   if (Fsync(fd) < 0) die("Fsync %s failed\n", filename);
-
   Close(fd);
+#endif
+
   after = now_usec();
   return after - before - timer_overhead;
 }

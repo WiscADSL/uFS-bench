@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(default_build_type Release)
 
 option(USE_UFS "Build with uFS APIs" ON)
+option(USE_ALL_LEASE "Use all the leases" ON)
 
 set(SMALLFILE_BIN_NAME "smallfile")
 set(LARGEFILE_BIN_NAME "largefile")
@@ -29,3 +30,7 @@ if (USE_UFS)
   target_link_libraries(${LARGEFILE_BIN_NAME} PUBLIC ${CFS_DIR}/lib/tbb/build/tbb_build_release/libtbb.so.2)
   target_link_libraries(${LARGEFILE_BIN_NAME} PUBLIC ${CFS_DIR}/lib/tbb/build/tbb_build_release/libtbbmalloc.so.2)
 endif(USE_UFS)
+
+if (USE_ALL_LEASE)
+  add_definitions(-DUSE_ALL_LEASE)
+endif()

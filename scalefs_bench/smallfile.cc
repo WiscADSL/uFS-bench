@@ -140,12 +140,11 @@ int main(int argc, char **argv) {
 
 #ifdef USE_UFS
   printf("INFO: using uFS APIs\n");
+  int num_workers = 0;
+  int aid = initFs(shm_keys_str, num_workers);
 #else
   printf("INFO: using POSIX APIs\n");
 #endif
-
-  int num_workers = 0;
-  int aid = initFs(shm_keys_str, num_workers);
 
   buf = (char *)Malloc(FILESIZE);
   if (is_prep) {
@@ -160,19 +159,22 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+#ifdef USE_UFS
   if ((aid - 1) % num_workers != 0) {
     int target = (aid - 1) % num_workers;
     fprintf(stderr, "fileset reassigned to worker:%d num_workers:%d str:%s\n",
             target, num_workers, shm_keys_str);
     fs_admin_thread_reassign(0, target, FS_REASSIGN_FUTURE);
   }
+#endif
+
   for (int i = 0; i < FILESIZE; i++) {
     buf[i] = 'a';
   }
+
   run_benchmark(pin_core);
 
 done:
-  fprintf(stderr, "done: aid: %d\n", aid);
   Free(buf);
   exitFs();
   return 0;
