@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(default_build_type Release)
 
 option(USE_UFS "Build with uFS APIs" ON)
-option(USE_ALL_LEASE "Use all the leases" ON)
+option(USE_ALL_LEASE "Use all the leases" OFF)
 
 set(SMALLFILE_BIN_NAME "smallfile")
 set(LARGEFILE_BIN_NAME "largefile")
